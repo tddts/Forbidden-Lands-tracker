@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tabletop Combat Tracker</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#eee}
+header{padding:12px 16px;background:#1d1d1d;position:sticky;top:0}
+main{padding:16px;display:grid;grid-template-columns:320px 1fr;gap:16px}
+.panel{background:#1b1b1b;border:1px solid #333;border-radius:10px;padding:12px}
+input,button,select,textarea{margin:4px;padding:8px}
+.card{border:1px solid #444;border-radius:8px;padding:8px;margin:8px 0}
+.active{outline:2px solid gold}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h2>Tabletop Combat Tracker</h2>
+Round: <span id="round">1</span>
+<button onclick="nextRound()">Next Round</button>
+<button onclick="saveState()">Save</button>
+<button onclick="exportState()">Export</button>
+<input type="file" onchange="importState(event)">
+</header>
+
+<main>
+<div class="panel">
+<h3>Add Combatant</h3>
+<input id="name" placeholder="Name">
+<select id="type">
+<option>Character</option>
+<option>Monster</option>
+</select><br>
+<input id="hp" type="number" placeholder="HP" value="10">
+<input id="ac" type="number" placeholder="AC" value="10">
+<input id="init" type="number" placeholder="Initiative" value="10">
+<button onclick="addCombatant()">Add</button>
+
+<h3>Combat Log</h3>
+<div id="log"></div>
+</div>
+
+<div class="panel">
+<h3>Initiative Order</h3>
+<div id="combatants"></div>
+</div>
+</main>
+
+<script>
+const state={
+ round:1,
+ currentTurn:0,
+ combatants:{},
+ initiative:[],
+ log:[]
+};
+
+function id(){return crypto.randomUUID();}
+
+function addCombatant(){
+ const cid=id();
+ state.combatants[cid]={
+  id:cid,
+  name:name.value,
+  type:type.value,
+  hp:+hp.value,
+  maxHp:+hp.value,
+  ac:+ac.value,
+  initiative:+init.value,
+  conditions:[]
+ };
+ state.initiative.push(cid);
+ sortInit();
+ render();
+ saveState();
+}
+
+function sortInit(){
+ state.initiative.sort((a,b)=>
+ state.combatants[b].initiative-state.combatants[a].initiative);
+}
+
+function nextRound(){
+ state.round++;
+ logMsg("Round "+state.round+" begins");
+ render();
+ saveState();
+}
+
+function damage(id,amt){
+ state.combatants[id].hp-=amt;
+ logMsg(state.combatants[id].name+" takes "+amt);
+ render(); saveState();
+}
+
+function heal(id,amt){
+ state.combatants[id].hp+=amt;
+ logMsg(state.combatants[id].name+" heals "+amt);
+ render(); saveState();
+}
+
+function logMsg(msg){
+ state.log.unshift(msg);
+ state.log=state.log.slice(0,100);
+}
+
+function render(){
+ round.textContent=state.round;
+
+ combatants.innerHTML="";
+ state.initiative.forEach((cid,index)=>{
+  const c=state.combatants[cid];
+  combatants.innerHTML+=`
+   <div class="card ${index===state.currentTurn?'active':''}">
+    <b>${c.name}</b> (${c.type})<br>
+    HP ${c.hp}/${c.maxHp} | AC ${c.ac} | Init ${c.initiative}<br>
+    <button onclick="damage('${cid}',1)">-1 HP</button>
+    <button onclick="heal('${cid}',1)">+1 HP</button>
+   </div>`;
+ });
+
+ log.innerHTML=state.log.map(x=>"<div>"+x+"</div>").join("");
+}
+
+function saveState(){
+ localStorage.setItem("trackerState",JSON.stringify(state));
+}
+
+function loadState(){
+ const data=localStorage.getItem("trackerState");
+ if(!data) return;
+ Object.assign(state,JSON.parse(data));
+ render();
+}
+
+function exportState(){
+ const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="tracker-save.json";
+ a.click();
+}
+
+function importState(e){
+ const f=e.target.files[0];
+ if(!f) return;
+ const r=new FileReader();
+ r.onload=()=>{
+  const data=JSON.parse(r.result);
+  Object.assign(state,data);
+  render(); saveState();
+ };
+ r.readAsText(f);
+}
+
+loadState();
+render();
+</script>
+</body>
+</html>
